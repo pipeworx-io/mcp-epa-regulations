@@ -1,6 +1,6 @@
 {
   "name": "@pipeworx/mcp-epa-regulations",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "EPA Regulations MCP — US Environmental Protection Agency regulations (40 CFR).",
   "type": "module",
   "main": "src/index.ts",

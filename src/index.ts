@@ -308,40 +308,54 @@ async function searchRegulations(args: Record<string, unknown>): Promise<unknown
   if (!query) return { error: 'provide a query, e.g. "hazardous waste identification" or "emission standards"' };
 
   const limit = Math.min(Math.max(Number(args.limit) || 10, 1), 20);
-  const params = new URLSearchParams({
-    query,
-    per_page: String(Math.min(limit, 20)),
-    page: '1',
-    order: 'relevance',
-  });
-  params.append('hierarchy[title]', String(TITLE));
 
-  const data = await ecfrGet(`/search/v1/results?${params.toString()}`);
-  const meta = (data.meta as Record<string, unknown> | undefined) ?? {};
-  const rawResults = Array.isArray(data.results) ? (data.results as Array<Record<string, unknown>>) : [];
+  // eCFR search returns one row per matching PARAGRAPH, so a single dense
+  // section can fill an entire page. Dedupe by citation and walk up to 3 pages
+  // (20/page, the API max) until `limit` distinct sections are collected.
+  const seen = new Set<string>();
+  const results: Array<Record<string, unknown>> = [];
+  let total: unknown = null;
 
-  const results = rawResults
-    .map((r) => {
+  for (let page = 1; page <= 3 && results.length < limit; page++) {
+    const params = new URLSearchParams({
+      query,
+      per_page: '20',
+      page: String(page),
+      order: 'relevance',
+    });
+    params.append('hierarchy[title]', String(TITLE));
+
+    const data = await ecfrGet(`/search/v1/results?${params.toString()}`);
+    const meta = (data.meta as Record<string, unknown> | undefined) ?? {};
+    if (total == null) total = meta.total_count ?? null;
+    const rawResults = Array.isArray(data.results) ? (data.results as Array<Record<string, unknown>>) : [];
+    if (rawResults.length === 0) break;
+
+    for (const r of rawResults) {
+      if (results.length >= limit) break;
       const h = (r.hierarchy as Record<string, unknown> | undefined) ?? {};
       const headings = (r.headings as Record<string, unknown> | undefined) ?? {};
       const hHeadings = (r.hierarchy_headings as Record<string, unknown> | undefined) ?? {};
       const part = h.part != null ? String(h.part) : null;
       const section = h.section != null ? String(h.section) : null;
       const subpart = h.subpart != null ? String(h.subpart) : null;
+      if (!section && !part) continue;
       const heading =
         (typeof headings.section === 'string' && stripHtml(headings.section)) ||
         (typeof hHeadings.section === 'string' && stripHtml(hHeadings.section)) ||
         null;
-      let citation: string | null = null;
-      let source_url: string | null = null;
+      let citation: string;
+      let source_url: string;
       if (section) {
         citation = `${CITE} ${section}`;
         source_url = `https://www.ecfr.gov/current/title-${TITLE}/section-${section}`;
-      } else if (part) {
+      } else {
         citation = `${CITE} Part ${part}`;
         source_url = `https://www.ecfr.gov/current/title-${TITLE}/part-${part}`;
       }
-      return {
+      if (seen.has(citation)) continue;
+      seen.add(citation);
+      results.push({
         part,
         subpart,
         section,
@@ -349,17 +363,17 @@ async function searchRegulations(args: Record<string, unknown>): Promise<unknown
         heading,
         excerpt: stripHtml(r.full_text_excerpt ?? (r as Record<string, unknown>).excerpt).slice(0, 300),
         source_url,
-      };
-    })
-    .filter((r) => r.section || r.part)
-    .slice(0, limit);
+      });
+    }
+    if (rawResults.length < 20) break;
+  }
 
   return {
     query,
-    total_matches: meta.total_count ?? null,
+    total_matches: total,
     count: results.length,
-    scope: 'EPA regulations — 40 CFR (air, water, waste, chemicals)',
-    source: 'eCFR / EPA 40 CFR',
+    scope: 'FCC regulations — 47 CFR (Federal Communications Commission / telecommunications)',
+    source: 'eCFR / FCC 47 CFR',
     results,
   };
 }

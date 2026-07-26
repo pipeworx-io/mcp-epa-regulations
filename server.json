@@ -3,7 +3,7 @@
   "name": "io.github.pipeworx-io/epa-regulations",
   "title": "Epa Regulations",
   "description": "EPA Regulations MCP — US Environmental Protection Agency regulations (40 CFR).",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "websiteUrl": "https://pipeworx.io/packs/epa-regulations",
   "repository": {
     "url": "https://github.com/pipeworx-io/mcp-epa-regulations",
